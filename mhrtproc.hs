@@ -11,13 +11,15 @@ import Data.Text (Text)
 import Data.Maybe
 import Data.List
 import Data.Monoid
-import Data.Aeson
+import Data.Aeson (FromJSON, ToJSON, encode, decode)
 import GHC.Generics (Generic)
 import Data.Time.Clock
 import qualified Data.Map as M
 import System.IO.Unsafe
-import Network.Wreq
+import qualified Network.Wreq as R
 import Web.Scotty
+import Control.Monad.IO.Class
+import Control.Concurrent.MVar
 
 type Patient = Int
 
@@ -52,22 +54,6 @@ data TriggerThreshold = TriggerThreshold {
 instance FromJSON TriggerThreshold
 instance ToJSON TriggerThreshold
 
-getUniquedataTypes :: PatientData -> PatientData
-getUniquedataTypes xs = remove $ sort xs
-  where
-    remove []  = []
-    remove [x] = [x]
-    remove (x1:x2:xs)
-      | dataType x1 == dataType x2  = remove (x1:xs)
-      | otherwise = x1 : remove (x2:xs)
-
-
-patientState :: Patient -> HealthDB -> Maybe PatientData
-patientState p hdb =
-	case M.lookup p hdb of
-		Nothing -> Nothing
-		Just a -> Just $ getUniquedataTypes a
-
 isThresholdSurpassed :: Patient -> Double -> TriggerThreshold -> Bool
 isThresholdSurpassed p value threshold =
 	(value < thMin threshold || value > thMax threshold) && patientMatches (patientId threshold) p
@@ -90,7 +76,10 @@ getEventsForData ths d = [ fromJust x | x <- map (tryFireEvent d) ths, isJust x 
 
 getEvents ths pData = map (getEventsForData ths) pData
 
-main = scotty 3000 $ do
-	get "/:word" $ do
-		beam <- param "word"
-		html $ mconcat ["<h1>Scotty, ", beam, " me up!</h1>"]
+main =
+	scotty 3000 $ do
+
+		m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
+		post "/thresholds/" $ do
+			text "hello"
+
