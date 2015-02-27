@@ -20,6 +20,8 @@ import qualified Network.Wreq as R
 import Web.Scotty
 import Control.Monad.IO.Class
 import Control.Concurrent.MVar
+import Data.Text.Lazy (toStrict)
+import Control.Monad
 
 type Patient = Int
 
@@ -28,9 +30,6 @@ data HealthData = HealthData {
 		time :: UTCTime, patient :: Patient
 	} deriving (Show, Generic)
 
-
-instance FromJSON HealthData
-instance ToJSON HealthData
 instance Eq HealthData where
 	(HealthData t1 _ tm1 _ ) == (HealthData t2 _ tm2 _) = t1 == t2 && tm1 == tm2
 
@@ -76,10 +75,14 @@ getEventsForData ths d = [ fromJust x | x <- map (tryFireEvent d) ths, isJust x 
 
 getEvents ths pData = map (getEventsForData ths) pData
 
-main =
-	scotty 3000 $ do
+main = scotty 3000 $ do
+	m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
+	post "/thresholds/" $ do
+		newTh <- jsonData
+		liftIO $ modifyMVar_ m $ \(h, tl) -> return (h, tl ++ newTh)
+		(_, thl) <- liftIO $ readMVar m
+		json thl
 
-		m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
-		post "/thresholds/" $ do
-			text "hello"
+
+
 
