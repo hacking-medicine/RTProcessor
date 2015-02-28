@@ -111,7 +111,7 @@ main = scotty 3000 $ do
 		(hdb, thl) <- liftIO $ readMVar m
 		let existingEvents = getEventsDB pId hdb
 		let updEvents = existingEvents ++ newEvents
-		let firedEvents = getFiredEvents thl updEvents
+		let firedEvents = getFiredEvents thl newEvents
 		liftIO $ modifyMVar_ m $ \(h, tl) -> return (M.insert pId updEvents h, tl)
 		liftIO $ R.post "http://localhost:3001/notify" (toJSON firedEvents)
 
