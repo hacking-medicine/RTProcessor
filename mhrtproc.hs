@@ -127,3 +127,7 @@ main = scotty 3000 $ do
 		d <- liftIO getCurrentTime
 		json $ d
 
+	get "/thresholds" $ do
+		(_, thl) <- liftIO $ readMVar m
+		json thl
+
