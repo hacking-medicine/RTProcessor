@@ -27,6 +27,7 @@ import Data.Text.Lazy.Encoding (decodeUtf8)
 import Control.Applicative     ((<$>))
 import Web.Scotty.Internal.Types
 import Data.Text.Internal.Lazy
+import Network.Wai.Middleware.RequestLogger
 
 
 data HealthData = HealthData {
@@ -100,6 +101,7 @@ data EventsGetResponse = EventsGetResponse { success :: Bool, fired :: Int }
 main :: IO ()
 main = scotty 3000 $ do
 	m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
+	middleware logStdoutDev
 	post "/thresholds/" $ do
 		newTh <- jsonData
 		liftIO $ modifyMVar_ m $ \(h, tl) -> return (h, tl ++ newTh)

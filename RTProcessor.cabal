@@ -25,4 +25,5 @@ executable rtproc
                         http-types,
                         time,
                         wai,
-                        warp
+                        warp,
+                        wai-extra
