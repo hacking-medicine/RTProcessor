@@ -1,0 +1,28 @@
+name:                RTProcessor
+version:             0.0.1
+synopsis:            RealTimeProcessor for HeartSavers
+homepage:            https://github.com/hacking-medicine/RTProcessor
+license:             MIT
+author:              Guillermo Julián
+maintainer:          gjulianm@outlook.com
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable rtproc
+  main-is:             	mhrtproc.hs
+  -- other-modules:
+  build-depends:       	base ==4.7.*,
+                        transformers,
+                        containers,
+                        aeson,
+                        utf8-string,
+                        scotty,
+                        wreq == 0.3.*,
+                        text,
+                        bytestring,
+                        blaze-builder,
+                        http-types,
+                        time,
+                        wai,
+                        warp
