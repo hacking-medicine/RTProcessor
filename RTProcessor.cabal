@@ -18,7 +18,7 @@ executable rtproc
                         aeson,
                         utf8-string,
                         scotty,
-                        wreq,
+                        wreq == 0.3.*,
                         text,
                         bytestring,
                         blaze-builder,
