@@ -3,7 +3,7 @@
 
 import Network.Wai
 import Network.Wai.Handler.Warp
-import Network.HTTP.Types (status200)
+import Network.HTTP.Types
 import Blaze.ByteString.Builder (copyByteString)
 import qualified Data.ByteString.UTF8 as BU
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -11,7 +11,7 @@ import Data.Text (Text)
 import Data.Maybe
 import Data.List
 import Data.Monoid
-import Data.Aeson (FromJSON, ToJSON, encode, decode)
+import Data.Aeson (FromJSON, ToJSON, encode, decode, toJSON)
 import GHC.Generics (Generic)
 import Data.Time.Clock
 import qualified Data.Map as M
@@ -19,15 +19,19 @@ import System.IO.Unsafe
 import qualified Network.Wreq as R
 import Web.Scotty
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Control.Concurrent.MVar
 import Data.Text.Lazy (toStrict)
 import Control.Monad
+import Data.Text.Lazy.Encoding (decodeUtf8)
+import Control.Applicative     ((<$>))
+import Web.Scotty.Internal.Types
+import Data.Text.Internal.Lazy
 
-type Patient = Int
 
 data HealthData = HealthData {
 		dataType :: Int, value :: Double,
-		time :: UTCTime, patient :: Patient
+		time :: UTCTime, patient :: Int
 	} deriving (Show, Generic)
 
 instance Eq HealthData where
@@ -36,13 +40,22 @@ instance Eq HealthData where
 instance Ord HealthData where
 	(HealthData _ _ time1 _ ) `compare` (HealthData _ _ time2 _ ) = time1 `compare` time2
 
+instance FromJSON HealthData
+instance ToJSON HealthData
+
 type PatientData = [HealthData]
-type HealthDB = M.Map Patient PatientData
+data PatientJsonData = PatientJsonData { patientEvents :: [HealthData] }
+
+
+type HealthDB = M.Map Int [HealthData]
 
 data Trigger = Trigger {
-		triggerType :: Int, targetPatient :: Patient,
+		triggerType :: Int, targetPatient :: Int,
 		timestamp :: UTCTime
 	} deriving (Show, Generic)
+
+instance FromJSON Trigger
+instance ToJSON Trigger
 
 type EventTrigger = HealthData -> Trigger
 data TriggerThreshold = TriggerThreshold {
@@ -53,9 +66,9 @@ data TriggerThreshold = TriggerThreshold {
 instance FromJSON TriggerThreshold
 instance ToJSON TriggerThreshold
 
-isThresholdSurpassed :: Patient -> Double -> TriggerThreshold -> Bool
-isThresholdSurpassed p value threshold =
-	(value < thMin threshold || value > thMax threshold) && patientMatches (patientId threshold) p
+isThresholdSurpassed :: Int -> Double -> TriggerThreshold -> Bool
+isThresholdSurpassed p val threshold =
+	(val < thMin threshold || val > thMax threshold) && patientMatches (patientId threshold) p
 	where
 		patientMatches Nothing _ = True
 		patientMatches (Just a) b = a == b
@@ -70,11 +83,21 @@ tryFireEvent d th =
 	else Nothing
 
 
-getEventsForData :: [TriggerThreshold] -> HealthData -> [Trigger]
-getEventsForData ths d = [ fromJust x | x <- map (tryFireEvent d) ths, isJust x ]
+getFiredEventsForData :: [TriggerThreshold] -> HealthData -> [Trigger]
+getFiredEventsForData ths d = catMaybes $ map (tryFireEvent d) ths
 
-getEvents ths pData = map (getEventsForData ths) pData
+getFiredEvents :: [TriggerThreshold] -> PatientData -> [Trigger]
+getFiredEvents ths pData = concat $ map (getFiredEventsForData ths) pData
 
+getEventsDB :: Int -> HealthDB -> [HealthData]
+getEventsDB pId hdb =
+	case M.lookup pId hdb of
+		Just e -> e
+		Nothing -> []
+
+data EventsGetResponse = EventsGetResponse { success :: Bool, fired :: Int }
+
+main :: IO ()
 main = scotty 3000 $ do
 	m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
 	post "/thresholds/" $ do
@@ -82,7 +105,19 @@ main = scotty 3000 $ do
 		liftIO $ modifyMVar_ m $ \(h, tl) -> return (h, tl ++ newTh)
 		(_, thl) <- liftIO $ readMVar m
 		json thl
+	post "/events/:id" $ do
+		pId <- param "id"
+		newEvents <- jsonData
+		(hdb, thl) <- liftIO $ readMVar m
+		let existingEvents = getEventsDB pId hdb
+		let updEvents = existingEvents ++ newEvents
+		let firedEvents = getFiredEvents thl updEvents
+		liftIO $ modifyMVar_ m $ \(h, tl) -> return (M.insert pId updEvents h, tl)
+		liftIO $ R.post "http://localhost:3001/notify" (toJSON firedEvents)
 
+		json firedEvents
 
-
+	get "/date" $ do
+		d <- liftIO getCurrentTime
+		json $ d
 
