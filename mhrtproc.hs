@@ -66,6 +66,13 @@ data TriggerThreshold = TriggerThreshold {
 instance FromJSON TriggerThreshold
 instance ToJSON TriggerThreshold
 
+data TriggerPresence = TriggerPresence {
+		dataTypes :: [Int], tId :: Int
+	} deriving (Show, Generic)
+
+instance FromJSON TriggerPresence
+instance ToJSON TriggerPresence
+
 isThresholdSurpassed :: Int -> Double -> TriggerThreshold -> Bool
 isThresholdSurpassed p val threshold =
 	(val < thMin threshold || val > thMax threshold) && patientMatches (patientId threshold) p
@@ -100,6 +107,7 @@ data EventsGetResponse = EventsGetResponse { success :: Bool, fired :: Int }
 main :: IO ()
 main = scotty 3000 $ do
 	m <- liftIO $ newMVar (M.empty :: HealthDB, [ ] :: [TriggerThreshold])
+	pThl <- liftIO $ newMVar([(TriggerPresence [10, 11] 2)])
 	post "/thresholds/" $ do
 		newTh <- jsonData
 		liftIO $ modifyMVar_ m $ \(h, tl) -> return (h, tl ++ newTh)
