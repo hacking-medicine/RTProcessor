@@ -119,6 +119,10 @@ main = scotty 3000 $ do
 
 		json firedEvents
 
+	get "/thdelete" $ do
+		liftIO $ modifyMVar_ m $ \(h, tl) -> return (h, [])
+		text "Deleted!"
+
 	get "/date" $ do
 		d <- liftIO getCurrentTime
 		json $ d
